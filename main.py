@@ -1,54 +1,22 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
-from fastapi import HTTPException
-from db import get_users, get_user, add_user
+from db import connect, disconnect
+from user import router as user_router
 
-app = FastAPI()
+# Initialize the FastAPI application
+app = FastAPI(title="User Management API")
 
-# --- Pydantic for data validation with POST ---
-class UserCreate(BaseModel):
-    username: str
-    email: str
-    password: str
+# Database connection on startup
+@app.on_event("startup")
+async def startup_event():
+    # Establishes connection to PostgreSQL
+    await connect()
 
-class PasswordChange(BaseModel):
-    username: str
-    new_password: str
+# Database disconnection on shutdown
+@app.on_event("shutdown")
+async def shutdown_event():
+    # Safely closes the database connection
+    await disconnect()
 
-# --- Test Endpoint ---
-@app.get("/")
-async def home():
-    return {"message": "API działa!"}
-
-# Get all users (No password_hash)
-@app.get("/users")
-async def list_users():
-    users = await get_users()
-    return [
-        {"id": u["id"], "username": u["username"], "email": u["email"]}
-        for u in users
-    ]
-
-# --- Get one user (No password_hash) ---
-@app.get("/users/{username}")
-async def get_one_user(username: str):
-    user = await get_user(username)
-    if user is None:
-        return {"error": "User not found"}
-    return user
-
-# --- Add new user (POST JSON) ---
-@app.post("/users")
-async def create_user(user: UserCreate):
-    await add_user(user.username, user.email, user.password)
-    return {"status": "ok", "username": user.username}
-
-# --- Change user password ---
-@app.post("/users/change-password")
-async def change_user_password(data: PasswordChange):
-    user = await get_user(data.username)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    await change_password(data.username, data.new_password)
-    return {"status": "ok", "username": data.username, "message": "Password changed"}
+# Registering user routes
+# All endpoints from user/controller.py will now start with /users
+app.include_router(user_router, prefix="/users", tags=["users"])

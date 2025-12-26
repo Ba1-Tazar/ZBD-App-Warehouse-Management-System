@@ -1,39 +1,46 @@
-import asyncio
 import asyncpg
+import bcrypt
 
-# Connect to Database
+# Private global variable to store the active database connection
+_connection = None
+
+# Database connection details
+DB_CONFIG = {
+    "user": "baltazar",
+    "password": "admin",
+    "database": "myproject",
+    "host": "127.0.0.1"
+}
+
+async def connect():
+    """
+    Initializes the database connection using the singleton pattern.
+    Stores the connection in the global _connection variable.
+    """
+    global _connection
+    if _connection is None or _connection.is_closed():
+        _connection = await asyncpg.connect(**DB_CONFIG)
+        print("Database: Connected successfully.")
+
+async def disconnect():
+    """
+    Closes the database connection if it exists and resets the global variable.
+    """
+    global _connection
+    if _connection:
+        await _connection.close()
+        _connection = None
+        print("Database: Connection closed.")
+
 async def get_connection():
-    return await asyncpg.connect(
-        user='baltazar',
-        password='admin',
-        database='myproject',
-        host='127.0.0.1'
-    )
-
-async def get_user(username: str):
-    conn = get_connection()
-    user = await conn.fetchrow(
-        "SELECT * FROM users WHERE username = $1",
-        username
-    )
-    return user
-
-async def get_users():
-
-    conn = get_connection() 
-    rows = await conn.fetch("SELECT * FROM users;")
-
-    return rows
-
-async def add_user(username, email, plain_password):
-    conn = get_connection()
-    hashed = bcrypt.hashpw(plain_password.encode(), bcrypt.gensalt()).decode()
-
-    await conn.execute(
-        "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)",
-        username, email, hashed
-    )
+    """
+    Returns the active connection object.
+    Raises an exception if the connection has not been initialized.
+    """
+    if _connection is None or _connection.is_closed():
+        raise Exception("Database connection not initialized! Call connect() first.")
+    return _connection
 
 
 if __name__ == "__main__":
-    
+   pass 

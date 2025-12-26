@@ -1,4 +1,4 @@
-#!/home/baltazar/git/Work_Space/university/S3/Zaawansowane_Bazy_Danych/MyProject/venv/bin/python3
+#!/home/baltazar/git/ZBD_App_Project/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys
