@@ -1,22 +1,26 @@
 from fastapi import FastAPI
-from db import connect, disconnect
-from user import router as user_router
+from tortoise.contrib.fastapi import register_tortoise
+from user.controller import router as user_router
 
-# Initialize the FastAPI application
-app = FastAPI(title="User Management API")
+# Initialize the main FastAPI application
+app = FastAPI(title="User Management API with ORM")
 
-# Database connection on startup
-@app.on_event("startup")
-async def startup_event():
-    # Establishes connection to PostgreSQL
-    await connect()
+# Register the user routes under the /users path
+# Using tags helps group these endpoints in the automatically generated Swagger UI
+app.include_router(user_router, prefix="/users", tags=["Users"])
 
-# Database disconnection on shutdown
-@app.on_event("shutdown")
-async def shutdown_event():
-    # Safely closes the database connection
-    await disconnect()
-
-# Registering user routes
-# All endpoints from user/controller.py will now start with /users
-app.include_router(user_router, prefix="/users", tags=["users"])
+# Tortoise ORM setup and database connection logic
+register_tortoise(
+    app,
+    # Ensure the credentials (user:password@host:port/dbname) match your local Postgres setup
+    db_url="postgres://baltazar:admin@127.0.0.1:5432/myproject",
+    
+    # Define where Tortoise should look for the User models
+    modules={"models": ["user.model"]},
+    
+    # Set to True to automatically create tables on startup if they don't exist
+    generate_schemas=True,
+    
+    # Enable built-in Tortoise handlers to return clean JSON errors on DB failures
+    add_exception_handlers=True,
+)
