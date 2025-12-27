@@ -69,7 +69,7 @@ The project follows a **Layered Architecture** to ensure clean code and separati
 
 ### Installation
 1. Clone the repository.
-2. Install dependencies: `pip install fastapi tortoise-orm uvicorn pydantic`.
+2. Install dependencies: `pip install fastapi "tortoise-orm[asyncpg]" uvicorn pydantic "passlib[bcrypt]"`.
 3. Configure your database URL in `main.py`.
 4. Run the application: `uvicorn main:app --reload`.
 
