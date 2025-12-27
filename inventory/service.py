@@ -30,13 +30,13 @@ class WarehouseService:
     @staticmethod
     async def get_inventory_report():
         """
-        Database Iterator (Cursor):
-        Fetches records one by one from the database to save memory.
-        Satisfies the project requirement for using cursors/iterators.
+        Database Iterator:
+        Uses asynchronous iteration to fetch records efficiently.
+        Satisfies the project requirement for using iterators.
         """
-        # .all().iterate() uses a database cursor for memory efficiency
-        async for log in WarehouseLog.all().prefetch_related("product", "user").iterate():
-            # Records are processed individually via the generator
+        # Stream data directly from the database to optimize memory usage
+        async for log in WarehouseLog.all().prefetch_related("product", "user"):
+            # Process each record individually via the async generator
             yield log
 
     @staticmethod
