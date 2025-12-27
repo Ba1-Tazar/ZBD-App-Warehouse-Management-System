@@ -2,8 +2,8 @@ from tortoise import Tortoise
 from tortoise.transactions import in_transaction
 from user.model import Product, WarehouseLog, User
 
-
 class WarehouseService:
+
     @staticmethod
     async def adjust_stock(product_id: int, user: User, amount: int, action: str):
         """
@@ -11,16 +11,24 @@ class WarehouseService:
         Updates stock levels and creates an audit log entry simultaneously.
         Ensures that stock changes never occur without a corresponding log.
         """
-        # Transaction ensures data integrity between stock level and logs
         async with in_transaction() as conn:
             product = await Product.get(id=product_id)
-            product.stock_quantity += amount
+            
+            # Logic to distinguish between incoming and outgoing goods
+            if action.upper() == "OUT":
+                if product.stock_quantity < amount:
+                    raise Exception("Not enough stock available")
+                product.stock_quantity -= amount
+            else:
+                # Default to IN for any other case or explicit "IN"
+                product.stock_quantity += amount
+
             await product.save(using_db=conn)
             
             # Create an audit log for the operation
             await WarehouseLog.create(
-                action_type=action,
-                quantity_change=amount,
+                action_type=action.upper(),
+                quantity_change=amount if action.upper() == "IN" else -amount,
                 product=product,
                 user=user,
                 using_db=conn

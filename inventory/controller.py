@@ -8,8 +8,13 @@ from user.model import (
 from user.auth import get_admin_user, get_current_user
 from .service import WarehouseService
 from datetime import datetime
+from enum import Enum
 
 router = APIRouter()
+
+class ActionType(str, Enum):
+    IN = "IN"
+    OUT = "OUT"
 
 # ----------------------------------------------------------------------------------
 #                                 OPERATIONS
@@ -21,7 +26,7 @@ router = APIRouter()
 async def adjust_product_stock(
     product_id: int, 
     amount: int, 
-    action: str, # Expected values: "IN" or "OUT"
+    action: ActionType, # Expected values: "IN" or "OUT"
     current_user: User = Depends(get_current_user)):
     """
     Update stock levels via WarehouseService with automated transaction logging.
@@ -31,7 +36,7 @@ async def adjust_product_stock(
             product_id=product_id, 
             user=current_user, 
             amount=amount, 
-            action=action
+            action=action.value # .value wyciągnie czysty tekst "IN" lub "OUT"
         )
         return {
             "message": "Stock updated successfully", 
@@ -40,6 +45,7 @@ async def adjust_product_stock(
     except Exception as e:
         # Return error details if stock adjustment fails
         raise HTTPException(status_code=400, detail=str(e))
+
 # ----------------------------------------------------------------------------------
 #                                  REPORTS
 # ----------------------------------------------------------------------------------
