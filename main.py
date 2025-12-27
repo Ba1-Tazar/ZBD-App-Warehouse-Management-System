@@ -2,11 +2,13 @@ import bcrypt
 from fastapi import FastAPI
 from tortoise.contrib.fastapi import register_tortoise
 from user.controller import router as user_router
+from inventory.controller import router as inventory_router
 from user.model import User
 
 app = FastAPI(title="Warehouse Management System")
 
 app.include_router(user_router, prefix="/users")
+app.include_router(inventory_router, prefix="/inventory")
 
 async def create_default_admin():
     # Ensure the system has at least one administrative account on startup

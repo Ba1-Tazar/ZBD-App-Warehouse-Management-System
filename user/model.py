@@ -59,7 +59,6 @@ class WarehouseLog(models.Model):
     quantity_change = fields.IntField()
     created_at = fields.DatetimeField(auto_now_add=True)
 
-    # RELACJE
     user = fields.ForeignKeyField("models.User", related_name="logs")
     product = fields.ForeignKeyField("models.Product", related_name="logs")
 
