@@ -20,7 +20,7 @@ This project is an advanced extension of a FastAPI application developed during 
 
 ## 📊 Database Schema (ERD)
 
-<img width="1004" height="543" alt="ZBD - App - Project - ERD - Diagram" src="https://github.com/user-attachments/assets/ef3aeb89-aed0-4676-9f1b-e459df5b64a8" />
+<img width="1503" height="607" alt="ZBD - App - Project - ERD - Diagram" src="https://github.com/user-attachments/assets/25b46c6b-e880-4853-a885-e4d7844837bb" />
 
 ### Database Schema Details
 
