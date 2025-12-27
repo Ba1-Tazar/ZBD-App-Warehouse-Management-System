@@ -6,8 +6,87 @@ from user.model import (
     User
 )
 from user.auth import get_admin_user, get_current_user
+from .service import WarehouseService
+from datetime import datetime
 
 router = APIRouter()
+
+# ----------------------------------------------------------------------------------
+#                                 OPERATIONS
+# ----------------------------------------------------------------------------------
+
+# -- USER --
+# Handle stock adjustments (e.g., receiving or releasing goods)
+@router.post("/products/{product_id}/adjust", tags=["Inventory: Operations"])
+async def adjust_product_stock(
+    product_id: int, 
+    amount: int, 
+    action: str, # Expected values: "IN" or "OUT"
+    current_user: User = Depends(get_current_user)):
+    """
+    Update stock levels via WarehouseService with automated transaction logging.
+    """
+    try:
+        updated_product = await WarehouseService.adjust_stock(
+            product_id=product_id, 
+            user=current_user, 
+            amount=amount, 
+            action=action
+        )
+        return {
+            "message": "Stock updated successfully", 
+            "new_quantity": updated_product.stock_quantity
+        }
+    except Exception as e:
+        # Return error details if stock adjustment fails
+        raise HTTPException(status_code=400, detail=str(e))
+# ----------------------------------------------------------------------------------
+#                                  REPORTS
+# ----------------------------------------------------------------------------------
+
+# -- ADMIN --
+# Generate comprehensive inventory report using DB cursors
+@router.get("/reports/inventory", tags=["Inventory: Reports"])
+async def get_full_report(admin: User = Depends(get_admin_user)):
+    """
+    Fetch full movement history using a database iterator (cursor) for memory efficiency.
+    """
+    report = []
+    # Stream entries via the service layer iterator
+    async for entry in WarehouseService.get_inventory_report():
+        report.append({
+            "date": entry.created_at,
+            "user": entry.user.login,
+            "product": entry.product.name,
+            "change": entry.quantity_change,
+            "type": entry.action_type
+        })
+    return report
+
+# Generate financial stock valuation grouped by supplier via raw SQL
+@router.get("/reports/valuation", tags=["Inventory: Reports"])
+async def get_valuation_report(admin: User = Depends(get_admin_user)):
+    """
+    Advanced Requirement: Complex SQL Query.
+    Returns a financial valuation report grouped by supplier.
+    Only accessible by administrators.
+    """
+    try:
+        # Call the complex SQL query from the service layer
+        report_data = await WarehouseService.get_supplier_valuation_report()
+        
+        return {
+            "report_name": "Supplier Stock Valuation",
+            "generated_at": datetime.now(),
+            "currency": "PLN",
+            "data": report_data
+        }
+    except Exception as e:
+        # Handle potential SQL errors or connection issues
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error generating valuation report: {str(e)}"
+        )
 
 # ----------------------------------------------------------------------------------
 #                                 SUPPLIERS
@@ -41,6 +120,11 @@ async def create_location(data: LocationSchema, admin: User = Depends(get_admin_
     
     return await Location.create(**data.model_dump(exclude={"id"}))
 
+# -- USER --
+@router.get("/locations", tags=["Inventory: Locations"])
+async def list_locations(user: User = Depends(get_current_user)):
+    return await Location.all().prefetch_related("products")
+
 # ----------------------------------------------------------------------------------
 #                                 PRODUCTS
 # ----------------------------------------------------------------------------------
@@ -52,5 +136,25 @@ async def create_product(data: ProductSchema, admin: User = Depends(get_admin_us
     # Logic to ensure the supplier and location IDs actually exist
     if not await Supplier.exists(id=data.supplier_id):
         raise HTTPException(status_code=404, detail="Supplier not found")
+    if not await Location.exists(id=data.location_id):
+        raise HTTPException(status_code=404, detail="Location not found")
     
     return await Product.create(**data.model_dump(exclude={"id"}))
+
+# -- USER --
+@router.get("/products", tags=["Inventory: Products"])
+async def list_products(user: User = Depends(get_current_user)):
+    products = await Product.all().prefetch_related("supplier", "location")
+    return [
+        {
+            "name": p.name,
+            "sku": p.sku,
+            "stock": p.stock_quantity,
+            "supplier": p.supplier.name if p.supplier else None,
+            "location": f"{p.location.zone_name}-{p.location.shelf_number}" if p.location else None
+        } for p in products
+    ]
+
+# ----------------------------------------------------------------------------------
+#                                 
+# ----------------------------------------------------------------------------------
