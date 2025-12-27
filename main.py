@@ -6,7 +6,7 @@ from user.model import User
 
 app = FastAPI(title="Warehouse Management System")
 
-app.include_router(user_router, prefix="/users", tags=["Users"])
+app.include_router(user_router, prefix="/users")
 
 async def create_default_admin():
     # Ensure the system has at least one administrative account on startup
