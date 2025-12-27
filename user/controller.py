@@ -10,7 +10,7 @@ router = APIRouter()
 #                               PUBLIC
 # ----------------------------------------------------------------------------------
 
-@router.post("/register", status_code=201, tags=["Public"])
+@router.post("/register", status_code=201, tags=["Users: Public"])
 async def register_user(user_data: UserSchema):
     """
     Public endpoint for new user registration.
@@ -32,7 +32,7 @@ async def register_user(user_data: UserSchema):
 #                           LOGGED-IN USER ONLY
 # ----------------------------------------------------------------------------------
 
-@router.get("/me", tags=["User Profile"])
+@router.get("/me", tags=["Users: User Profile"])
 async def read_users_me(current_user: User = Depends(get_current_user)):
     """
     Private endpoint: Requires authentication via HTTP Basic.
@@ -44,7 +44,7 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
 #                               ADMIN ONLY
 # ----------------------------------------------------------------------------------
 
-@router.get("/{user_id}", tags=["Admin Management"])
+@router.get("/{user_id}", tags=["Users: Admin Management"])
 async def get_user_by_id(user_id: int, current_user: User = Depends(get_admin_user)):
     """Fetches a specific user by their unique ID"""
     user = await User.get_or_none(id=user_id)
@@ -55,14 +55,14 @@ async def get_user_by_id(user_id: int, current_user: User = Depends(get_admin_us
         
     return {"id": user.id, "login": user.login}
 
-@router.get("/", tags=["Admin Management"])
+@router.get("/", tags=["Users: Admin Management"])
 async def list_users(current_user: User = Depends(get_admin_user)):
     """Returns a list of all registered users"""
 
     users = await User.all().order_by("id")
     return [{"id": u.id, "login": u.login} for u in users]
 
-@router.post("/", status_code=201, tags=["Admin Management"])
+@router.post("/", status_code=201, tags=["Users: Admin Management"])
 async def create_user(user_data: UserSchema, current_user: User = Depends(get_admin_user)):
     """Handles new user registration and password hashing"""
     # Hash the plain-text password before storing it for security
@@ -72,7 +72,7 @@ async def create_user(user_data: UserSchema, current_user: User = Depends(get_ad
     await User.create(login=user_data.login, password=hashed)
     return {"message": "User created successfully"}
 
-@router.put("/{user_id}", tags=["Admin Management"])
+@router.put("/{user_id}", tags=["Users: Admin Management"])
 async def update_user(user_id: int, user_data: UserSchema, current_user: User = Depends(get_admin_user)): 
     """Updates user credentials for an existing record"""
     user = await User.get_or_none(id=user_id)
@@ -88,7 +88,7 @@ async def update_user(user_id: int, user_data: UserSchema, current_user: User = 
     await user.save() 
     return {"message": "User updated successfully"}
 
-@router.delete("/{user_id}", tags=["Admin Management"])
+@router.delete("/{user_id}", tags=["Users: Admin Management"])
 async def delete_user(user_id: int, current_user: User = Depends(get_admin_user)):
     """Removes a user record from the system"""
     user = await User.get_or_none(id=user_id)
