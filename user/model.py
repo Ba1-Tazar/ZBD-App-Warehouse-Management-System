@@ -10,6 +10,7 @@ class User(models.Model):
     login = fields.CharField(max_length=100, unique=True)
     # Stores the hashed password string
     password = fields.CharField(max_length=255)
+    is_admin = fields.BooleanField(default=False)
 
     class Meta:
         # Explicitly naming the table in PostgreSQL
@@ -26,8 +27,8 @@ class UserSchema(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "login": "admin_user",
-                "password": "secret_password"
+                "login": "user",
+                "password": "verystrongpassword"
             }
         }
     }

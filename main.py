@@ -1,26 +1,39 @@
+import bcrypt
 from fastapi import FastAPI
 from tortoise.contrib.fastapi import register_tortoise
 from user.controller import router as user_router
+from user.model import User
 
-# Initialize the main FastAPI application
-app = FastAPI(title="User Management API with ORM")
+app = FastAPI(title="Warehouse Management System")
 
-# Register the user routes under the /users path
-# Using tags helps group these endpoints in the automatically generated Swagger UI
 app.include_router(user_router, prefix="/users", tags=["Users"])
 
-# Tortoise ORM setup and database connection logic
+async def create_default_admin():
+    # Ensure the system has at least one administrative account on startup
+    admin_exists = await User.filter(login="admin").exists()
+    
+    if not admin_exists:
+        # Generate hash for the default credentials
+        hashed_password = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
+        
+        await User.create(
+            login="admin",
+            password=hashed_password,
+            is_admin=True
+        )
+        print("Default admin account initialized.")
+    else:
+        print("Admin account verification complete.")
+
 register_tortoise(
     app,
-    # Ensure the credentials (user:password@host:port/dbname) match your local Postgres setup
     db_url="postgres://baltazar:admin@127.0.0.1:5432/myproject",
-    
-    # Define where Tortoise should look for the User models
     modules={"models": ["user.model"]},
-    
-    # Set to True to automatically create tables on startup if they don't exist
     generate_schemas=True,
-    
-    # Enable built-in Tortoise handlers to return clean JSON errors on DB failures
     add_exception_handlers=True,
 )
+
+@app.on_event("startup")
+async def startup_event():
+    # Run database seeding routines
+    await create_default_admin()
