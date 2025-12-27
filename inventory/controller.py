@@ -147,6 +147,7 @@ async def list_products(user: User = Depends(get_current_user)):
     products = await Product.all().prefetch_related("supplier", "location")
     return [
         {
+            "id": p.id,
             "name": p.name,
             "sku": p.sku,
             "stock": p.stock_quantity,
