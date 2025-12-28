@@ -1,8 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from user.model import (
-    Supplier, SupplierSchema, 
+    Supplier, SupplierSchema,
+    SupplierCreate, SupplierResponse,
     Location, LocationSchema, 
+    LocationCreate, LocationResponse,
     Product, ProductSchema,
+    ProductCreate, ProductResponse,
+    ProductUpdate,
     User
 )
 from user.auth import get_admin_user, get_current_user
@@ -100,7 +104,7 @@ async def get_valuation_report(admin: User = Depends(get_admin_user)):
 
 # -- ADMIN --
 @router.post("/suppliers", response_model=SupplierSchema, status_code=201, tags=["Inventory: Suppliers"])
-async def create_supplier(data: SupplierSchema, admin: User = Depends(get_admin_user)):
+async def create_supplier(data: SupplierCreate, admin: User = Depends(get_admin_user)):
     """Add a new supplier to the system."""
     return await Supplier.create(**data.model_dump(exclude={"id"}))
 
@@ -117,7 +121,7 @@ async def list_suppliers(current_user: User = Depends(get_current_user)):
 
 # -- ADMIN --
 @router.post("/locations", response_model=LocationSchema, status_code=201, tags=["Inventory: Locations"])
-async def create_location(data: LocationSchema, admin: User = Depends(get_admin_user)):
+async def create_location(data: LocationCreate, admin: User = Depends(get_admin_user)):
     """Define a new warehouse slot (Zone + Shelf)."""
     # Check for duplicates manually to provide a nice error message
     existing = await Location.get_or_none(zone_name=data.zone_name, shelf_number=data.shelf_number)
@@ -137,7 +141,7 @@ async def list_locations(user: User = Depends(get_current_user)):
 
 # -- ADMIN --
 @router.post("/products", response_model=ProductSchema, status_code=201, tags=["Inventory: Products"])
-async def create_product(data: ProductSchema, admin: User = Depends(get_admin_user)):
+async def create_product(data: ProductCreate, admin: User = Depends(get_admin_user)):
     """Create a product and link it to a supplier and location."""
     # Logic to ensure the supplier and location IDs actually exist
     if not await Supplier.exists(id=data.supplier_id):
@@ -146,6 +150,59 @@ async def create_product(data: ProductSchema, admin: User = Depends(get_admin_us
         raise HTTPException(status_code=404, detail="Location not found")
     
     return await Product.create(**data.model_dump(exclude={"id"}))
+
+@router.patch("/products/{product_id}", tags=["Inventory: Products"])
+async def update_product_details(
+    product_id: int, 
+    data: ProductUpdate,
+    admin: User = Depends(get_admin_user)
+):
+    product = await Product.get_or_none(id=product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    update_data = data.model_dump(exclude_unset=True)
+
+    if "sku" in update_data:
+        new_sku = update_data["sku"]
+        if new_sku != product.sku and await Product.exists(sku=new_sku):
+            raise HTTPException(status_code=400, detail="SKU already in use")
+        product.sku = new_sku
+
+    if "supplier_id" in update_data:
+        if not await Supplier.exists(id=update_data["supplier_id"]):
+            raise HTTPException(status_code=404, detail="Supplier not found")
+        product.supplier_id = update_data["supplier_id"]
+
+    if "location_id" in update_data:
+        if not await Location.exists(id=update_data["location_id"]):
+            raise HTTPException(status_code=404, detail="Location not found")
+        product.location_id = update_data["location_id"]
+
+    if "name" in update_data:
+        product.name = update_data["name"]
+    if "price" in update_data:
+        product.price = update_data["price"]
+        
+    await product.save()
+    return product
+
+@router.delete("/products/{product_id}", tags=["Inventory: Products"])
+async def delete_product(
+    product_id: int, 
+    admin: User = Depends(get_admin_user)
+):
+    """
+    Administrative removal: Only admins can delete products from the database.
+    This will also remove associated logs due to CASCADE constraints.
+    """
+    
+    product = await Product.get_or_none(id=product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    await product.delete()
+    return {"message": f"Product with ID {product_id} has been permanently deleted by admin."}
 
 # -- USER --
 @router.get("/products", tags=["Inventory: Products"])

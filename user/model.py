@@ -88,29 +88,62 @@ class UserSchema(BaseModel):
 
 # --- SUPPLIER SCHEMAS ---
 class SupplierSchema(BaseModel):
-    id: Optional[int] = None
+    """Base fields for warehouse suppliers."""
     name: str
     contact_email: Optional[str] = None
 
+class SupplierCreate(SupplierSchema):
+    """Schema for creating or updating a supplier. No ID field included."""
+    pass
+
+class SupplierResponse(SupplierSchema):
+    """Schema for supplier responses, including the database-generated ID."""
+    id: int
+
     model_config = {"from_attributes": True}
+
 
 # --- LOCATION SCHEMAS ---
 class LocationSchema(BaseModel):
-    id: Optional[int] = None
+    """Base fields for warehouse locations."""
     zone_name: str
     shelf_number: int
+
+class LocationCreate(LocationSchema):
+    """Schema for creating or updating a location. No ID field included."""
+    pass
+
+class LocationResponse(LocationSchema):
+    """Schema for location responses, including the database-generated ID."""
+    id: int
 
     model_config = {"from_attributes": True}
 
 # --- PRODUCT SCHEMAS ---
 class ProductSchema(BaseModel):
-    id: Optional[int] = None
     name: str
     sku: str
     price: Decimal = Decimal("0.00")
     stock_quantity: int = 0
     supplier_id: Optional[int] = None
     location_id: Optional[int] = None
+    
+
+class ProductCreate(ProductSchema):
+    """Schema for creating or updating a product. No ID field included."""
+    pass
+
+class ProductUpdate(BaseModel):
+    """Schema for partial product updates. All fields are optional."""
+    name: Optional[str] = None
+    price: Optional[float] = None
+    sku: Optional[str] = None
+    supplier_id: Optional[int] = None
+    location_id: Optional[int] = None
+
+class ProductResponse(ProductSchema):
+    """Schema for product responses, including the database-generated ID."""
+    id: int
 
     model_config = {"from_attributes": True}
 
