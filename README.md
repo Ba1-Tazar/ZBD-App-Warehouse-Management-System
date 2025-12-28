@@ -58,8 +58,7 @@ The project follows a **Layered Architecture** to ensure clean code and separati
 2. **Service Layer (`inventory/service.py`)**: Contains business logic, complex SQL queries, and transactional operations.
 3. **Controller Layer (`inventory/controller.py`)**: Manages API routing, request validation, and dependency injection for security.
 
-<img width="374" height="412" alt="image" src="https://github.com/user-attachments/assets/d8f0846d-e681-4fd4-98c0-a222d38a67be" />
-
+<img width="281" height="416" alt="image" src="https://github.com/user-attachments/assets/c4cc9f3c-1d9c-4df6-844e-77ab3bc5b4b2" />
 
 ## 🚦 Getting Started
 
