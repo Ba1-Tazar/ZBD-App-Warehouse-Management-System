@@ -1,31 +1,32 @@
 from tortoise import Tortoise
 from tortoise.transactions import in_transaction
-from user.model import Product, WarehouseLog, User
+from .model import Product, WarehouseLog
+from user.model import User
 
 class WarehouseService:
 
-    @staticmethod
+    staticmethod
     async def adjust_stock(product_id: int, user: User, amount: int, action: str):
         """
-        Transaction and Logic:
-        Updates stock levels and creates an audit log entry simultaneously.
-        Ensures that stock changes never occur without a corresponding log.
+        Handles stock level updates and logging within a single atomic transaction.
+        The using_db(conn) calls ensure all operations stay within the transaction context.
         """
         async with in_transaction() as conn:
-            product = await Product.get(id=product_id)
+            # Fetch product instance using the active transaction connection
+            product = await Product.get(id=product_id).using_db(conn)
             
-            # Logic to distinguish between incoming and outgoing goods
+            # Update quantity based on action type
             if action.upper() == "OUT":
                 if product.stock_quantity < amount:
                     raise Exception("Not enough stock available")
                 product.stock_quantity -= amount
             else:
-                # Default to IN for any other case or explicit "IN"
                 product.stock_quantity += amount
 
+            # Persist changes to the product table
             await product.save(using_db=conn)
             
-            # Create an audit log for the operation
+            # Create an audit log entry linked to the user and product
             await WarehouseLog.create(
                 action_type=action.upper(),
                 quantity_change=amount if action.upper() == "IN" else -amount,
@@ -38,26 +39,20 @@ class WarehouseService:
     @staticmethod
     async def get_inventory_report():
         """
-        Database Iterator:
-        Uses asynchronous iteration to fetch records efficiently.
-        Satisfies the project requirement for using iterators.
+        Asynchronous generator that streams log entries using a database cursor.
+        The .iterate() method prevents loading all records into memory at once.
         """
-        # Stream data directly from the database to optimize memory usage
-        async for log in WarehouseLog.all().prefetch_related("product", "user"):
-            # Process each record individually via the async generator
+        async for log in WarehouseLog.all().prefetch_related("product", "user").iterate():
             yield log
 
     @staticmethod
     async def get_supplier_valuation_report():
         """
-        Advanced SQL Execution:
-        Calculates total financial value of inventory grouped by supplier.
-        Uses JOIN, GROUP BY, and Aggregation (SUM) for complex reporting.
+        Executes a raw SQL query to perform server-side data aggregation.
+        Calculates total stock value by joining products and suppliers with GROUP BY.
         """
-        # Obtain the direct database connection for raw SQL execution
         connection = Tortoise.get_connection("default")
         
-        # Complex SQL query combining data from multiple tables
         sql_query = """
             SELECT s.name AS supplier_name, 
                    COUNT(p.id) AS unique_products, 
@@ -70,5 +65,5 @@ class WarehouseService:
             ORDER BY total_valuation DESC
         """
         
-        # Executes the query and returns results as a list of dictionaries
+        # Returns raw query results as a list of dictionaries
         return await connection.execute_query_dict(sql_query)

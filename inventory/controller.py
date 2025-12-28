@@ -1,15 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
-from user.model import (
-    Supplier, SupplierSchema,
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from typing import List
+
+from .model import Product, Supplier, Location, WarehouseLog
+from .schemas import (
+    ProductCreate, ProductUpdate, ProductResponse,
     SupplierCreate, SupplierResponse,
-    Location, LocationSchema, 
     LocationCreate, LocationResponse,
-    Product, ProductSchema,
-    ProductCreate, ProductResponse,
-    ProductUpdate,
-    User
+    WarehouseLogResponse
 )
+
+# Importy z modułu user (tylko to, co dotyczy użytkownika i sesji)
+from user.model import User
 from user.auth import get_admin_user, get_current_user
+
 from .service import WarehouseService
 from datetime import datetime
 from enum import Enum
@@ -103,14 +106,13 @@ async def get_valuation_report(admin: User = Depends(get_admin_user)):
 # ----------------------------------------------------------------------------------
 
 # -- ADMIN --
-@router.post("/suppliers", response_model=SupplierSchema, status_code=201, tags=["Inventory: Suppliers"])
+@router.post("/suppliers", response_model=SupplierResponse, status_code=201, tags=["Inventory: Suppliers"])
 async def create_supplier(data: SupplierCreate, admin: User = Depends(get_admin_user)):
     """Add a new supplier to the system."""
-    return await Supplier.create(**data.model_dump(exclude={"id"}))
-
+    return await Supplier.create(**data.model_dump())
 
 # -- USER --
-@router.get("/suppliers", response_model=list[SupplierSchema], tags=["Inventory: Suppliers"])
+@router.get("/suppliers", response_model=list[SupplierResponse], tags=["Inventory: Suppliers"])
 async def list_suppliers(current_user: User = Depends(get_current_user)):
     """List all suppliers (Available to all logged-in users)."""
     return await Supplier.all()
@@ -120,27 +122,29 @@ async def list_suppliers(current_user: User = Depends(get_current_user)):
 # ----------------------------------------------------------------------------------
 
 # -- ADMIN --
-@router.post("/locations", response_model=LocationSchema, status_code=201, tags=["Inventory: Locations"])
+@router.post("/locations", response_model=LocationResponse, status_code=201, tags=["Inventory: Locations"])
 async def create_location(data: LocationCreate, admin: User = Depends(get_admin_user)):
     """Define a new warehouse slot (Zone + Shelf)."""
-    # Check for duplicates manually to provide a nice error message
+    # Check if this zone and shelf combination is already taken
     existing = await Location.get_or_none(zone_name=data.zone_name, shelf_number=data.shelf_number)
     if existing:
         raise HTTPException(status_code=400, detail="Location already exists")
     
-    return await Location.create(**data.model_dump(exclude={"id"}))
+    # Create the location record
+    return await Location.create(**data.model_dump())
 
 # -- USER --
-@router.get("/locations", tags=["Inventory: Locations"])
+@router.get("/locations", response_model=list[LocationResponse], tags=["Inventory: Locations"])
 async def list_locations(user: User = Depends(get_current_user)):
-    return await Location.all().prefetch_related("products")
+    """Returns a list of all warehouse locations."""
+    return await Location.all()
 
 # ----------------------------------------------------------------------------------
 #                                 PRODUCTS
 # ----------------------------------------------------------------------------------
 
 # -- ADMIN --
-@router.post("/products", response_model=ProductSchema, status_code=201, tags=["Inventory: Products"])
+@router.post("/products", response_model=ProductResponse, status_code=201, tags=["Inventory: Products"])
 async def create_product(data: ProductCreate, admin: User = Depends(get_admin_user)):
     """Create a product and link it to a supplier and location."""
     # Logic to ensure the supplier and location IDs actually exist
@@ -149,7 +153,7 @@ async def create_product(data: ProductCreate, admin: User = Depends(get_admin_us
     if not await Location.exists(id=data.location_id):
         raise HTTPException(status_code=404, detail="Location not found")
     
-    return await Product.create(**data.model_dump(exclude={"id"}))
+    return await Product.create(**data.model_dump())
 
 @router.patch("/products/{product_id}", tags=["Inventory: Products"])
 async def update_product_details(
@@ -187,7 +191,7 @@ async def update_product_details(
     await product.save()
     return product
 
-@router.delete("/products/{product_id}", tags=["Inventory: Products"])
+@router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Inventory: Products"])
 async def delete_product(
     product_id: int, 
     admin: User = Depends(get_admin_user)
@@ -196,29 +200,20 @@ async def delete_product(
     Administrative removal: Only admins can delete products from the database.
     This will also remove associated logs due to CASCADE constraints.
     """
-    
     product = await Product.get_or_none(id=product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     
     await product.delete()
-    return {"message": f"Product with ID {product_id} has been permanently deleted by admin."}
+    
+    # Return a empty response not a dict
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 # -- USER --
-@router.get("/products", tags=["Inventory: Products"])
+@router.get("/products", response_model=list[ProductResponse], tags=["Inventory: Products"])
 async def list_products(user: User = Depends(get_current_user)):
-    products = await Product.all().prefetch_related("supplier", "location")
-    return [
-        {
-            "id": p.id,
-            "name": p.name,
-            "sku": p.sku,
-            "stock": p.stock_quantity,
-            "supplier": p.supplier.name if p.supplier else None,
-            "location": f"{p.location.zone_name}-{p.location.shelf_number}" if p.location else None
-        } for p in products
-    ]
-
-# ----------------------------------------------------------------------------------
-#                                 
-# ----------------------------------------------------------------------------------
+    """
+    Returns a list of products with nested supplier and location data.
+    FastAPI handles the dictionary conversion automatically.
+    """
+    return await Product.all().prefetch_related("supplier", "location")

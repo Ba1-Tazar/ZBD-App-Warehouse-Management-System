@@ -1,5 +1,13 @@
-from fastapi import APIRouter, HTTPException, Depends
-from .model import User, UserSchema 
+from fastapi import APIRouter, HTTPException, Depends, status
+from typing import List
+
+# Import modelu bazy danych
+from .model import User
+
+# Import schematów Pydantic
+from .schemas import UserCreate, UserResponse, UserUpdate
+
+# Import autoryzacji
 from .auth import get_current_user, get_admin_user
 import bcrypt
 
@@ -7,94 +15,109 @@ import bcrypt
 router = APIRouter()
 
 # ----------------------------------------------------------------------------------
-#                               PUBLIC
+#                               PUBLIC (NOT LOGGED IN)
 # ----------------------------------------------------------------------------------
 
-@router.post("/register", status_code=201, tags=["Users: Public"])
-async def register_user(user_data: UserSchema):
+@router.post("/register", status_code=status.HTTP_201_CREATED, tags=["Users: Public"])
+async def register_user(user_data: UserCreate):
     """
-    Public endpoint for new user registration.
-    No authentication dependency here so anyone can create an account.
+    Public registration endpoint.
     """
-    # Check if the login is already taken to provide a clean error message
-    existing_user = await User.get_or_none(login=user_data.login)
-    if existing_user:
+    if await User.exists(login=user_data.login):
         raise HTTPException(status_code=400, detail="Login already registered")
 
-    # Hash the password before saving for security
     hashed = bcrypt.hashpw(user_data.password.encode(), bcrypt.gensalt()).decode()
-    
-    # Create the user record in the database
-    await User.create(login=user_data.login, password=hashed)
+    await User.create(login=user_data.login, password=hashed, is_admin=False)
     return {"message": "User registered successfully"}
 
 # ----------------------------------------------------------------------------------
-#                           LOGGED-IN USER ONLY
+#                             USER (LOGGED IN)
 # ----------------------------------------------------------------------------------
 
-@router.get("/me", tags=["Users: User Profile"])
+@router.get("/me", response_model=UserResponse, tags=["Users: User Profile"])
 async def read_users_me(current_user: User = Depends(get_current_user)):
     """
-    Private endpoint: Requires authentication via HTTP Basic.
+    Returns the currently authenticated user's profile.
+    FastAPI will use UserResponse to filter out the password.
     """
-    return {"id": current_user.id, "login": current_user.login}
+    return current_user
 
 
 # ----------------------------------------------------------------------------------
-#                               ADMIN ONLY
+#                                  ADMIN ONLY
 # ----------------------------------------------------------------------------------
 
 @router.get("/{user_id}", tags=["Users: Admin Management"])
-async def get_user_by_id(user_id: int, current_user: User = Depends(get_admin_user)):
-    """Fetches a specific user by their unique ID"""
+async def get_user_by_id(user_id: int, admin: User = Depends(get_admin_user)):
+    """Fetches user details by ID. Restricted to administrators."""
     user = await User.get_or_none(id=user_id)
-    
-    # Return a 404 error if the user does not exist in the database
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-        
-    return {"id": user.id, "login": user.login}
+    return {"id": user.id, "login": user.login, "is_admin": user.is_admin}
 
 @router.get("/", tags=["Users: Admin Management"])
-async def list_users(current_user: User = Depends(get_admin_user)):
-    """Returns a list of all registered users"""
-
+async def list_users(admin: User = Depends(get_admin_user)):
+    """Returns a list of all system users ordered by ID."""
     users = await User.all().order_by("id")
-    return [{"id": u.id, "login": u.login} for u in users]
+    return [{"id": u.id, "login": u.login, "is_admin": u.is_admin} for u in users]
 
-@router.post("/", status_code=201, tags=["Users: Admin Management"])
-async def create_user(user_data: UserSchema, current_user: User = Depends(get_admin_user)):
-    """Handles new user registration and password hashing"""
-    # Hash the plain-text password before storing it for security
-    hashed = bcrypt.hashpw(user_data.password.encode(), bcrypt.gensalt()).decode() 
+@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED, tags=["Users: Admin Management"])
+async def create_user(user_data: UserCreate, admin: User = Depends(get_admin_user)):
+    """
+    Admin tool to manually create users. 
+    Uses UserCreate for strict validation (password required).
+    """
+    if await User.exists(login=user_data.login):
+        raise HTTPException(status_code=400, detail="Login already exists")
+
+    hashed = bcrypt.hashpw(user_data.password.encode(), bcrypt.gensalt()).decode()
     
-    # Persist the new user record to the database
-    await User.create(login=user_data.login, password=hashed)
-    return {"message": "User created successfully"}
+    user = await User.create(
+        login=user_data.login, 
+        password=hashed, 
+        is_admin=user_data.is_admin
+    )
+    return user
 
-@router.put("/{user_id}", tags=["Users: Admin Management"])
-async def update_user(user_id: int, user_data: UserSchema, current_user: User = Depends(get_admin_user)): 
-    """Updates user credentials for an existing record"""
+@router.patch("/{user_id}", response_model=UserResponse, tags=["Users: Admin Management"])
+async def update_user(user_id: int, user_data: UserUpdate, admin: User = Depends(get_admin_user)): 
+    """
+    Partial update of user credentials. 
+    Only fields provided in the JSON body will be updated.
+    """
     user = await User.get_or_none(id=user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # Re-hash the new password and update the model instance
-    hashed = bcrypt.hashpw(user_data.password.encode(), bcrypt.gensalt()).decode()
-    user.login = user_data.login
-    user.password = hashed
-    
-    # Commit changes to the database
-    await user.save() 
-    return {"message": "User updated successfully"}
 
-@router.delete("/{user_id}", tags=["Users: Admin Management"])
-async def delete_user(user_id: int, current_user: User = Depends(get_admin_user)):
-    """Removes a user record from the system"""
+    data_to_update = user_data.model_dump(exclude_unset=True)
+
+    if "login" in data_to_update:
+        new_login = data_to_update["login"]
+        if new_login != user.login and await User.exists(login=new_login):
+            raise HTTPException(status_code=400, detail="New login is already taken")
+        user.login = new_login
+
+    if "password" in data_to_update:
+        user.password = bcrypt.hashpw(data_to_update["password"].encode(), bcrypt.gensalt()).decode()
+    
+    if "is_admin" in data_to_update:
+        user.is_admin = data_to_update["is_admin"]
+    
+    await user.save() 
+    return user
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Users: Admin Management"])
+async def delete_user(user_id: int, admin: User = Depends(get_admin_user)):
+    """
+    Removes a user record. 
+    Prevents admins from deleting themselves to maintain system access.
+    """
+    if user_id == admin.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own admin account")
+
     user = await User.get_or_none(id=user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    # Execute the deletion query
     await user.delete() 
-    return {"message": "User deleted successfully"}
+    return None # 204 No Content does not return a body
