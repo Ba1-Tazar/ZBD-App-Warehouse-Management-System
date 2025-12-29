@@ -147,13 +147,16 @@ async def list_locations(user: User = Depends(get_current_user)):
 @router.post("/products", response_model=ProductResponse, status_code=201, tags=["Inventory: Products"])
 async def create_product(data: ProductCreate, admin: User = Depends(get_admin_user)):
     """Create a product and link it to a supplier and location."""
-    # Logic to ensure the supplier and location IDs actually exist
     if not await Supplier.exists(id=data.supplier_id):
         raise HTTPException(status_code=404, detail="Supplier not found")
     if not await Location.exists(id=data.location_id):
         raise HTTPException(status_code=404, detail="Location not found")
     
-    return await Product.create(**data.model_dump())
+    product = await Product.create(**data.model_dump())
+
+    # 🔑 fetch related so response_model can serialize correctly
+    await product.fetch_related("supplier", "location")
+    return product
 
 @router.patch("/products/{product_id}", tags=["Inventory: Products"])
 async def update_product_details(

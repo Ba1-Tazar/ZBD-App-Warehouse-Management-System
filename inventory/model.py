@@ -1,7 +1,7 @@
 from tortoise import fields, models
 
 class Supplier(models.Model):
-    id = fields.IntField(pk=True)
+    id = fields.IntField(primary_key=True)
     name = fields.CharField(max_length=100, unique=True)
     contact_email = fields.CharField(max_length=100, null=True)
 
@@ -9,7 +9,7 @@ class Supplier(models.Model):
         table = "suppliers"
 
 class Location(models.Model):
-    id = fields.IntField(pk=True)
+    id = fields.IntField(primary_key=True)
     zone_name = fields.CharField(max_length=10)
     shelf_number = fields.IntField()
     
@@ -18,7 +18,7 @@ class Location(models.Model):
         unique_together = (("zone_name", "shelf_number"),)
 
 class Product(models.Model):
-    id = fields.IntField(pk=True)
+    id = fields.IntField(primary_key=True)
     name = fields.CharField(max_length=100)
     sku = fields.CharField(max_length=50, unique=True)
     price = fields.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -32,7 +32,7 @@ class Product(models.Model):
         table = "products"
 
 class WarehouseLog(models.Model):
-    id = fields.IntField(pk=True)
+    id = fields.IntField(primary_key=True)
     action_type = fields.CharField(max_length=20)
     quantity_change = fields.IntField()
     created_at = fields.DatetimeField(auto_now_add=True)
