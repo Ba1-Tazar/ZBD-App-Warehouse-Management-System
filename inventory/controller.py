@@ -61,19 +61,18 @@ async def adjust_product_stock(
 # Generate comprehensive inventory report using DB cursors
 @router.get("/reports/inventory", tags=["Inventory: Reports"])
 async def get_full_report(admin: User = Depends(get_admin_user)):
-    """
-    Fetch full movement history using a database iterator (cursor) for memory efficiency.
-    """
     report = []
-    # Stream entries via the service layer iterator
+    
+    # Use iterator to go over the record 
     async for entry in WarehouseService.get_inventory_report():
         report.append({
-            "date": entry.created_at,
-            "user": entry.user.login,
-            "product": entry.product.name,
-            "change": entry.quantity_change,
-            "type": entry.action_type
+            "date": entry["created_at"],
+            "user": entry["user_login"],
+            "product": entry["product_name"],
+            "change": entry["quantity_change"],
+            "type": entry["action_type"]
         })
+    
     return report
 
 # Generate financial stock valuation grouped by supplier via raw SQL

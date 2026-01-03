@@ -39,11 +39,29 @@ class WarehouseService:
     @staticmethod
     async def get_inventory_report():
         """
-        Asynchronous generator that streams log entries using a database cursor.
-        The .iterate() method prevents loading all records into memory at once.
+        Server-side cursor implementation using raw asyncpg.
+        This streams rows one by one from PostgreSQL.
         """
-        async for log in WarehouseLog.all().prefetch_related("product", "user").iterate():
-            yield log
+        conn = Tortoise.get_connection("default")
+        
+        # raw asyncpg connection 
+        async with conn.acquire_connection() as raw_conn:
+            async with raw_conn.transaction():
+                # define serwer iterator
+                query = """
+                    SELECT 
+                        l.created_at, 
+                        l.quantity_change, 
+                        l.action_type, 
+                        p.name as product_name, 
+                        u.login as user_login
+                    FROM warehouse_logs l
+                    JOIN products p ON l.product_id = p.id
+                    JOIN users u ON l.user_id = u.id
+                    ORDER BY l.created_at DESC
+                """
+                async for record in raw_conn.cursor(query):
+                    yield record
 
     @staticmethod
     async def get_supplier_valuation_report():

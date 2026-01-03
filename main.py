@@ -13,7 +13,7 @@ app.include_router(inventory_router, prefix="/inventory")
 register_tortoise(
     app,
     db_url="postgres://baltazar:admin@127.0.0.1:5432/myproject",
-    modules={"models": ["user.model"]},
+    modules={"models": ["user.model", "inventory.model"]},
     generate_schemas=True,
     add_exception_handlers=True,
 )
