@@ -11,7 +11,7 @@ from user.model import User
 
 TEST_DATABASE_URL = "postgres://baltazar:admin@localhost:5432/warehouse_test"
 
-# MOCK: Zastępuje prawdziwe logowanie w testach
+# MOCK: Replaces real login in tests
 async def skip_auth():
     return User(
         username="test_admin",
@@ -20,19 +20,19 @@ async def skip_auth():
 
 @pytest_asyncio.fixture(autouse=True)
 async def setup_db():
-    # Inicjalizacja bazy
+    # Database initialization
     await Tortoise.init(
         db_url=TEST_DATABASE_URL,
         modules={"models": ["user.model", "inventory.model"]}
     )
     await Tortoise.generate_schemas()
     
-    # Override autoryzacji
+    # Auth override
     app.dependency_overrides[get_current_user] = skip_auth
 
     yield
 
-    # Czyszczenie wszystkich tabel po teście
+    # Cleaning all tables after test
     for model in Tortoise.apps.get("models").values():
         await model.all().delete()
 
@@ -60,7 +60,7 @@ async def test_create_product_validation_error():
 
 @pytest.mark.asyncio
 async def test_create_product_success():
-    # Tworzymy rekordy nadrzędne
+    # Create parent records
     supplier = await Supplier.create(name="Test Supplier", contact_email="test@example.com")
     location = await Location.create(zone_name="A", shelf_number=10)
 
@@ -79,7 +79,7 @@ async def test_create_product_success():
 
     assert response.status_code == 201
 
-    # Pobieramy produkt z relacjami
+    # Fetch product with relationships
     product = await Product.get(id=response.json()["id"])
     await product.fetch_related("supplier", "location")
 
