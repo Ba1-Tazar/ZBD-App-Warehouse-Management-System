@@ -9,7 +9,7 @@ from .schemas import (
     WarehouseLogResponse
 )
 
-# Importy z modułu user (tylko to, co dotyczy użytkownika i sesji)
+# Imports from the user module (only what relates to user and session)
 from user.model import User
 from user.auth import get_admin_user, get_current_user
 
